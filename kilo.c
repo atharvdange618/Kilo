@@ -116,8 +116,24 @@ char editorReadKey() {
 // editorReadKey()'s job is to wait for one keypress, and return it.
 
 /*** output ***/
+
+void editorDrawRows() {
+  int y;
+  // we don't know the size of terminal yet, soo we are only drawing 24 rows
+  for (y = 0; y < 24; y++) {
+    write(STDOUT_FILENO, "~\r\n", 3);
+  }
+}
+
+
 void editorRefreshScreen(){
   write(STDOUT_FILENO, "\x1b[2J", 4);
+  write(STDOUT_FILENO, "\x1b[H", 3);
+
+  editorDrawRows();
+
+  // after we are done drawing, we do another <esc>[H escape sequence to reposition the
+  // cursor backup at the top-left corner.
   write(STDOUT_FILENO, "\x1b[H", 3);
 }
 // write() and STDOUT_FILENO come from <unistd.h>.
