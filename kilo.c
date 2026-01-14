@@ -1,21 +1,33 @@
+/*** includes ***/
+
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
 
+/*** data ***/
 // we store the original terminal attributes in a global variable, orig_termios.
 // we assign the orig_termios struct to the raw struct in order to make copy of it before
 // we start making our changes.
 struct termios orig_termios;
 
+/*** terminal ***/
+void die(const char *s) {
+  perror(s);
+  exit(1);
+}
+// perror() comes from <stdio.h>, and exit() comes from <stdlib.h>.
+
 void disableRawMode() {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+    die("tcsetattr");
 }
 
 // Turning off echoing
 void enableRawMode() {
-  tcgetattr(STDIN_FILENO, &orig_termios);
+  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) die("tcgetattr");
 
   // atexit() comes from <stdlib.h>.
   // we use it to register our disableRawMode() function to be called automatically
@@ -75,13 +87,19 @@ void enableRawMode() {
   raw.c_cc[VTIME] = 1;
   // VMIN and VTIME come from <termios.h>. They are indexes into the c_cc field, which stands for “control characters”,
   // an array of bytes that control various terminal settings.
+  // VMIN value sets the minimum number of bytes of input needed before read() can return().
+  // we set it to 0 so that read() returns as soon as there is any input to be read.
+  // VTIME value sets the maximum amount of time to wait before read() returns.
+  // it is in tenths of a second, so we set it to 1/10 of second, or 100ms.
+  // if read() times out, it will return 0, which makes sense because its usual return value is the number of bytes read.
 
   // after the attributes have been modified, you can then apply them to the terminal using tcsetattr().
   // the TCSAFLUSH argument specifies when to apply the change: in this case, it waits for all pending
   // output to be written to the terminal, and also discards any input that hasn’t been read.
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
+/*** init ***/
 int main(){
   enableRawMode();
 
@@ -96,10 +114,9 @@ int main(){
   // nonprintable characters that we don't want to print to the screen.
   // ASCII codes 0-31 are all control characters, and 127 is also a control character.
   // ASCII codes 32-216 are all printable.
-
     while (1) {
     char c = '\0';
-    read(STDIN_FILENO, &c, 1);
+    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
     if (iscntrl(c)) {
       printf("%d\r\n", c);
     } else {
@@ -108,6 +125,9 @@ int main(){
     if (c == 'q') break;
   }
   // added a timeout for read(), so that read() returns if it doesn’t get any input for a certain amount of time.
+
+  // errno and EAGAIN come from <errno.h>.
+  // tcsetattr(), tcgetattr(), and read() all return -1 on failure, and set the errno value to indicate the error.
 
   // printf() can print multiple representations of a byte. %d tells it to format the byte
   // as a decimal number (it's ASCII code), and %c tells it to write out the byte directly, as a character.
