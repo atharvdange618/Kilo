@@ -7,6 +7,9 @@
 #include <termios.h>
 #include <unistd.h>
 
+/*** defines ***/
+#define CTRL_KEY(k) ((k) & 0x1f)
+
 /*** data ***/
 // we store the original terminal attributes in a global variable, orig_termios.
 // we assign the orig_termios struct to the raw struct in order to make copy of it before
@@ -122,7 +125,7 @@ int main(){
     } else {
       printf("%d ('%c')\r\n", c, c);
     }
-    if (c == 'q') break;
+    if (c == CTRL_KEY('q')) break;
   }
   // added a timeout for read(), so that read() returns if it doesn’t get any input for a certain amount of time.
 
