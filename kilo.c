@@ -18,6 +18,9 @@ struct termios orig_termios;
 
 /*** terminal ***/
 void die(const char *s) {
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+  write(STDOUT_FILENO, "\x1b[H", 3);
+
   perror(s);
   exit(1);
 }
@@ -102,6 +105,58 @@ void enableRawMode() {
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
+char editorReadKey() {
+  int nread;
+  char c;
+  while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
+    if(nread == -1 && errno != EAGAIN) die("read");
+  }
+  return c;
+}
+// editorReadKey()'s job is to wait for one keypress, and return it.
+
+/*** output ***/
+void editorRefreshScreen(){
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+  write(STDOUT_FILENO, "\x1b[H", 3);
+}
+// write() and STDOUT_FILENO come from <unistd.h>.
+// the 4 in our write() call means we are writing 4 bytes out to the terminal.
+// the first byte it \x1b, which is the escape character, or 27 in decimal.
+// the other 3 bytes are [2J
+
+// second escape sequence is only 3 bytes long, and uses the H command (cursor position) to
+// position the cursor. the H command actually takes two arguments: the row number and the column number
+// at which to position the cursor.
+
+// extra info:
+// we are writing an escape sequence to the terminal. escape sequences always
+// starts with an escape character (27) followed by a [ character. escape sequences instruct the
+// terminal to do various text formatting tasks, such as coloring text, moving the cursor around, and
+// clearing parts of th screen.
+//
+// we are using the J command (erase in display) to clear the screen. escape sequence commands take args
+// which come before the command. in this case the arg is 2, which says to clear the entire screen. <esc>[1J would
+// clear the screen from the cursor up to the end of the screen. also 0 is the default arg for J, so just <esc>[J by
+// itself would also clear the screen from the cursor to the end.
+//
+// for this text editor we will mostly be using VT100 escape sequences, which are supported very widely by
+// modern terminal emulators.
+
+/*** input ***/
+void editorProcessKeypress() {
+  char c = editorReadKey();
+
+  switch (c) {
+    case CTRL_KEY('q'):
+      write(STDOUT_FILENO, "\x1b[2J", 4);
+      write(STDOUT_FILENO, "\x1b[H", 3);
+    exit(0);
+    break;
+  }
+}
+// editorProcessKeypress() waits for a keypress, then handles it.
+
 /*** init ***/
 int main(){
   enableRawMode();
@@ -117,15 +172,9 @@ int main(){
   // nonprintable characters that we don't want to print to the screen.
   // ASCII codes 0-31 are all control characters, and 127 is also a control character.
   // ASCII codes 32-216 are all printable.
-    while (1) {
-    char c = '\0';
-    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) die("read");
-    if (iscntrl(c)) {
-      printf("%d\r\n", c);
-    } else {
-      printf("%d ('%c')\r\n", c, c);
-    }
-    if (c == CTRL_KEY('q')) break;
+  while (1) {
+    editorRefreshScreen();
+    editorProcessKeypress();
   }
   // added a timeout for read(), so that read() returns if it doesn’t get any input for a certain amount of time.
 
