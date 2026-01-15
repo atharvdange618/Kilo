@@ -16,11 +16,25 @@ This is my implementation of **kilo**, a minimal text editor written in C, follo
 ### Currently Implemented
 
 - ✅ **Raw Mode Terminal Handling**
+
   - Custom terminal flag configuration (termios)
   - Non-blocking input with timeout (VMIN/VTIME)
   - Disabled flow control (Ctrl-S/Ctrl-Q)
   - Signal handling override (Ctrl-C/Ctrl-Z)
   - Proper carriage return handling
+
+- ✅ **Screen Drawing & Display**
+
+  - VT100 escape sequence support
+  - Full screen clearing and refresh
+  - Centered welcome message with version
+  - Vim-style tilde rows
+  - Cursor hide/show during refresh (reduces flicker)
+
+- ✅ **Cursor Movement**
+  - WASD navigation (w=up, a=left, s=down, d=right)
+  - Real-time cursor position tracking
+  - Dynamic cursor positioning
 
 ## 🚀 Getting Started
 
@@ -46,7 +60,13 @@ cc kilo.c -o kilo -Wall -Wextra -pedantic -std=c99
 ./kilo
 ```
 
-Press `q` to quit. The program currently demonstrates raw mode input by displaying ASCII codes of pressed keys.
+**Controls:**
+
+- `w` - Move cursor up
+- `a` - Move cursor left
+- `s` - Move cursor down
+- `d` - Move cursor right
+- `Ctrl-Q` - Quit
 
 ## 📚 What I'm Learning
 
@@ -91,6 +111,15 @@ Following the 184-step tutorial from [viewsourcecode.org/snaptoken/kilo](https:/
 - Inspired by the philosophy of learning by building
 
 ## 📝 Development Log
+
+**2026-01-15:**
+
+- Implemented cursor movement with WASD navigation
+- Added cursor position tracking (cx, cy coordinates)
+- Fixed cursor positioning bug (removed top-left reset)
+- Enhanced screen refresh with cursor hide/show to reduce flicker
+- Added centered welcome message display
+- Improved code formatting and documentation
 
 **2026-01-14:**
 
