@@ -11,13 +11,14 @@
  * flags)
  * - <unistd.h>     : POSIX API (read, write, STDIN_FILENO, STDOUT_FILENO)
  */
-#include <ctype.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <string.h>
 
 /*** defines ***/
 
@@ -347,6 +348,44 @@ int getWindowSize(int *rows, int *cols) {
 // command is that the documentation doesn’t specify what happens when you try
 // to move the cursor off-screen.
 
+/*** append buffer ***/
+struct abuf {
+  char *b;
+  int len;
+};
+
+#define ABUF_INIT {NULL, 0}
+
+// an append buffer consists of a pointer to our buffer in memory, and a length.
+// we define ABUF_INIT constant which represents an empty buffer. This acts as a constructor for
+// our abuf type.
+
+void abAppend(struct abuf *ab, const char *s, int len) {
+  char *new = realloc(ab->b, ab->len + len);
+
+  if(new == NULL) return;
+  memcpy(&new[ab->len], s, len);
+  ab->b = new;
+  ab->len += len;
+}
+
+void abFree(struct abuf *ab) {
+  free(ab->b);
+}
+
+// realloc() and free() come from <stdlib.h>. memcpy() comes from <string.h>.
+// To append a string s to an abuf, the first thing we do is make sure we
+// allocate enough memory to hold the new string. We ask realloc() to give us a block
+// of memory that is the size of the current string plus the size of the string we are appending.
+// realloc() will either extend the size of the block of memory we already have allocated, or it
+// will take care of free()ing the current block of memory and allocating a new block of memory
+// somewhere else that is big enough for our new string.
+//
+// then we use memcpy() to copy the string s after the end of the current data in the buffer, and we update
+// pointer and length of the abuf to the new values.
+//
+// abFree() is a destructor that deallocates the dynamic memory user by an abuf.
+
 /*** output ***/
 
 /*
@@ -363,13 +402,14 @@ int getWindowSize(int *rows, int *cols) {
  * Draws a column of tildes (~) down the left side of the screen, similar to
  * vim's display for lines past the end of the buffer.
  */
-void editorDrawRows() {
+void editorDrawRows(struct abuf *ab) {
   int y;
 
   for (y = 0; y < E.screenrows; y++) {
-    write(STDOUT_FILENO, "~", 1);
+    abAppend(ab, "~", 1);
+
     if (y < E.screenrows - 1) {
-      write(STDOUT_FILENO, "\r\n", 2);
+      abAppend(ab, "\r\n", 2);
     }
   }
 }
@@ -400,14 +440,19 @@ void editorDrawRows() {
  * We use VT100 sequences for broad terminal emulator compatibility.
  */
 void editorRefreshScreen() {
-  write(STDOUT_FILENO, "\x1b[2J", 4);
-  write(STDOUT_FILENO, "\x1b[H", 3);
+  struct abuf ab = ABUF_INIT;
 
-  editorDrawRows();
+  abAppend(&ab, "\x1b[2J", 4);
+  abAppend(&ab, "\x1b[H", 3);
+
+  editorDrawRows(&ab);
 
   // after we are done drawing, we do another <esc>[H escape sequence to
   // reposition the cursor backup at the top-left corner.
-  write(STDOUT_FILENO, "\x1b[H", 3);
+  abAppend(&ab, "\x1b[H", 3);
+
+  write(STDOUT_FILENO, ab.b, ab.len);
+  abFree(&ab);
 }
 // write() and STDOUT_FILENO come from <unistd.h>.
 // the 4 in our write() call means we are writing 4 bytes out to the terminal.
