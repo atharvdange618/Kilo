@@ -1,5 +1,9 @@
 /*** includes ***/
 
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 /*
  * Standard Library Headers:
  * - <errno.h>      : Error number definitions (errno, EAGAIN)
@@ -12,12 +16,14 @@
  */
 
 #include <errno.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <sys/types.h>
 
 /*** defines ***/
 
@@ -54,11 +60,23 @@ enum editorKey {
  *
  * We maintain the original terminal attributes so we can restore them when
  * the program exits, leaving the terminal in the state we found it.
+ *
+ * erow stands for editor row, and stores a line of text as a pointer to the dynamically
+ * allocated character data and a length. the typedef lets us refer to the type as erow
+ * instead of struct erow.
  */
+
+typedef struct erow {
+  int size;
+  char *chars;
+} erow;
+
 struct editorConfig {
   int cx, cy;
   int screenrows;
   int screencols;
+  int numrows;
+  erow row;
   struct termios orig_termios;
 };
 
@@ -403,6 +421,36 @@ int getWindowSize(int *rows, int *cols) {
 // command is that the documentation doesn’t specify what happens when you try
 // to move the cursor off-screen.
 
+/*** file i/o ***/
+
+void editorOpen(char *filename) {
+  FILE *fp = fopen(filename, "r");
+  if(!fp) die("fopen");
+
+  char *line = NULL;
+  size_t linecap = 0;
+  ssize_t linelen;
+  linelen = getline(&line, &linecap, fp);
+  if(linelen != -1){
+    while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+    linelen--;
+
+    E.row.size = linelen;
+    E.row.chars = malloc(linelen + 1);
+    memcpy(E.row.chars, line, linelen);
+    E.row.chars[linelen] = '\0';
+    E.numrows = 1;
+  }
+  free(line);
+  fclose(fp);
+}
+// malloc() comes from <stdlib.h>. ssize_t comes from <sys/types.h>.
+// FILE, fopen(), and getline() come from <stdio.h>.
+// editorOpen() now takes a filename and opens the file for reading using fopen().
+// We allow the user to choose a file to open by checking if they passed a filename as a
+// command line argument. If they did, we call editorOpen() and pass it the filename.
+// If they ran ./kilo with no arguments, editorOpen() will not be called and they’ll start with a blank file.
+
 /*** append buffer ***/
 struct abuf {
   char *b;
@@ -462,22 +510,28 @@ void editorDrawRows(struct abuf *ab) {
   int y;
 
   for (y = 0; y < E.screenrows; y++) {
-    if (y == E.screenrows / 3) {
-      char welcome[80];
-      int welcomelen = snprintf(welcome, sizeof(welcome),
+    if(y >= E.numrows) {
+      if (E.numrows == 0 && y == E.screenrows / 3) {
+        char welcome[80];
+        int welcomelen = snprintf(welcome, sizeof(welcome),
                                 "Kilo editor -- version %s", KILO_VERSION);
-      if (welcomelen > E.screencols)
-        welcomelen = E.screencols;
-      int padding = (E.screencols - welcomelen) / 2;
-      if (padding) {
+        if (welcomelen > E.screencols)
+          welcomelen = E.screencols;
+        int padding = (E.screencols - welcomelen) / 2;
+        if (padding) {
+          abAppend(ab, "~", 1);
+          padding--;
+        }
+        while (padding--)
+          abAppend(ab, " ", 1);
+        abAppend(ab, welcome, welcomelen);
+      } else {
         abAppend(ab, "~", 1);
-        padding--;
       }
-      while (padding--)
-        abAppend(ab, " ", 1);
-      abAppend(ab, welcome, welcomelen);
     } else {
-      abAppend(ab, "~", 1);
+      int len = E.row.size;
+      if(len > E.screencols) len = E.screencols;
+      abAppend(ab, E.row.chars, len);
     }
 
     abAppend(ab, "\x1b[K", 3);
@@ -643,15 +697,19 @@ void editorProcessKeypress() {
 void initEditor() {
   E.cx = 0;
   E.cy = 0;
+  E.numrows = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
 }
 
 /*** init ***/
-int main() {
+int main(int argc, char *argv[]) {
   enableRawMode();
   initEditor();
+  if (argc >= 2) {
+    editorOpen(argv[1]);
+  }
   // initEditor()’s job will be to initialize all the fields in the E struct.
 
   // read() and STDIN_FILENO come from <unistd.h>.
