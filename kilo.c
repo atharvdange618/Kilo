@@ -1,3 +1,5 @@
+// current Step 93
+
 /*** includes ***/
 
 #define _DEFAULT_SOURCE
@@ -21,9 +23,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
-#include <sys/types.h>
 
 /*** defines ***/
 
@@ -61,9 +63,9 @@ enum editorKey {
  * We maintain the original terminal attributes so we can restore them when
  * the program exits, leaving the terminal in the state we found it.
  *
- * erow stands for editor row, and stores a line of text as a pointer to the dynamically
- * allocated character data and a length. the typedef lets us refer to the type as erow
- * instead of struct erow.
+ * erow stands for editor row, and stores a line of text as a pointer to the
+ * dynamically allocated character data and a length. the typedef lets us refer
+ * to the type as erow instead of struct erow.
  */
 
 typedef struct erow {
@@ -289,43 +291,62 @@ int editorReadKey() {
   char c;
 
   while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
-    if (nread == -1 && errno != EAGAIN) die("read");
+    if (nread == -1 && errno != EAGAIN)
+      die("read");
   }
 
   if (c == '\x1b') {
     char seq[3];
 
-    if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
-    if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
+    if (read(STDIN_FILENO, &seq[0], 1) != 1)
+      return '\x1b';
+    if (read(STDIN_FILENO, &seq[1], 1) != 1)
+      return '\x1b';
 
     if (seq[0] == '[') {
       if (seq[1] >= '0' && seq[1] <= '9') {
-        if (read(STDIN_FILENO, &seq[2], 1) != 1) return '\x1b';
+        if (read(STDIN_FILENO, &seq[2], 1) != 1)
+          return '\x1b';
         if (seq[2] == '~') {
           switch (seq[1]) {
-            case '1': return HOME_KEY;
-            case '3': return DEL_KEY;
-            case '4': return END_KEY;
-            case '5': return PAGE_UP;
-            case '6': return PAGE_DOWN;
-            case '7': return HOME_KEY;
-            case '8': return END_KEY;
+          case '1':
+            return HOME_KEY;
+          case '3':
+            return DEL_KEY;
+          case '4':
+            return END_KEY;
+          case '5':
+            return PAGE_UP;
+          case '6':
+            return PAGE_DOWN;
+          case '7':
+            return HOME_KEY;
+          case '8':
+            return END_KEY;
           }
         }
       } else {
         switch (seq[1]) {
-          case 'A': return ARROW_UP;
-          case 'B': return ARROW_DOWN;
-          case 'C': return ARROW_RIGHT;
-          case 'D': return ARROW_LEFT;
-          case 'H': return HOME_KEY;
-          case 'F': return END_KEY;
+        case 'A':
+          return ARROW_UP;
+        case 'B':
+          return ARROW_DOWN;
+        case 'C':
+          return ARROW_RIGHT;
+        case 'D':
+          return ARROW_LEFT;
+        case 'H':
+          return HOME_KEY;
+        case 'F':
+          return END_KEY;
         }
       }
     } else if (seq[0] == 'O') {
       switch (seq[1]) {
-        case 'H': return HOME_KEY;
-        case 'F': return END_KEY;
+      case 'H':
+        return HOME_KEY;
+      case 'F':
+        return END_KEY;
       }
     }
 
@@ -439,13 +460,15 @@ void editorAppendRow(char *s, size_t len) {
 
 void editorOpen(char *filename) {
   FILE *fp = fopen(filename, "r");
-  if(!fp) die("fopen");
+  if (!fp)
+    die("fopen");
 
   char *line = NULL;
   size_t linecap = 0;
   ssize_t linelen;
   while ((linelen = getline(&line, &linecap, fp)) != -1) {
-    while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+    while (linelen > 0 &&
+           (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
       linelen--;
 
     editorAppendRow(line, linelen);
@@ -455,10 +478,11 @@ void editorOpen(char *filename) {
 }
 // malloc() comes from <stdlib.h>. ssize_t comes from <sys/types.h>.
 // FILE, fopen(), and getline() come from <stdio.h>.
-// editorOpen() now takes a filename and opens the file for reading using fopen().
-// We allow the user to choose a file to open by checking if they passed a filename as a
-// command line argument. If they did, we call editorOpen() and pass it the filename.
-// If they ran ./kilo with no arguments, editorOpen() will not be called and they’ll start with a blank file.
+// editorOpen() now takes a filename and opens the file for reading using
+// fopen(). We allow the user to choose a file to open by checking if they
+// passed a filename as a command line argument. If they did, we call
+// editorOpen() and pass it the filename. If they ran ./kilo with no arguments,
+// editorOpen() will not be called and they’ll start with a blank file.
 
 /*** append buffer ***/
 struct abuf {
@@ -510,20 +534,19 @@ void abFree(struct abuf *ab) { free(ab->b); }
  */
 
 void editorScroll() {
-  if(E.cy < E.rowoff) {
+  if (E.cy < E.rowoff) {
     E.rowoff = E.cy;
   }
-  if(E.cy >= E.rowoff + E.screenrows) {
+  if (E.cy >= E.rowoff + E.screenrows) {
     E.rowoff = E.cy - E.screenrows + 1;
   }
-  if(E.cx < E.coloff) {
+  if (E.cx < E.coloff) {
     E.coloff = E.cx;
   }
-  if(E.cx >= E.coloff + E.screencols) {
+  if (E.cx >= E.coloff + E.screencols) {
     E.coloff = E.cx - E.screencols + 1;
   }
 }
-
 
 /*
  * editorDrawRows() - Draw tilde rows on screen
@@ -536,11 +559,11 @@ void editorDrawRows(struct abuf *ab) {
 
   for (y = 0; y < E.screenrows; y++) {
     int filerow = y + E.rowoff;
-    if(filerow >= E.numrows) {
+    if (filerow >= E.numrows) {
       if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome),
-                                "Kilo editor -- version %s", KILO_VERSION);
+                                  "Kilo editor -- version %s", KILO_VERSION);
         if (welcomelen > E.screencols)
           welcomelen = E.screencols;
         int padding = (E.screencols - welcomelen) / 2;
@@ -556,15 +579,15 @@ void editorDrawRows(struct abuf *ab) {
       }
     } else {
       int len = E.row[filerow].size - E.coloff;
-      if(len < 0) len = 0;
-      if(len > E.screencols) len = E.screencols;
+      if (len < 0)
+        len = 0;
+      if (len > E.screencols)
+        len = E.screencols;
       abAppend(ab, &E.row[filerow].chars[E.coloff], len);
     }
 
     abAppend(ab, "\x1b[K", 3);
-    if (y < E.screenrows - 1) {
-      abAppend(ab, "\r\n", 2);
-    }
+    abAppend(ab, "\r\n", 2);
   }
 }
 
@@ -604,7 +627,8 @@ void editorRefreshScreen() {
   editorDrawRows(&ab);
 
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff), (E.cx - E.coloff) + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff),
+           (E.cx - E.coloff) + 1);
   abAppend(&ab, buf, strlen(buf));
 
   abAppend(&ab, "\x1b[?25h", 6);
@@ -656,7 +680,7 @@ void editorMoveCursor(int key) {
     }
     break;
   case ARROW_RIGHT:
-    if(row && E.cx < row->size) {
+    if (row && E.cx < row->size) {
       E.cx++;
     } else if (row && E.cx == row->size) {
       E.cy++;
@@ -677,7 +701,7 @@ void editorMoveCursor(int key) {
 
   row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
   int rowlen = row ? row->size : 0;
-  if(E.cx > rowlen) {
+  if (E.cx > rowlen) {
     E.cx = rowlen;
   }
 }
@@ -714,13 +738,11 @@ void editorProcessKeypress() {
     break;
 
   case PAGE_UP:
-  case PAGE_DOWN:
-  {
+  case PAGE_DOWN: {
     int times = E.screenrows;
     while (times--)
       editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
-  }
-  break;
+  } break;
 
   case ARROW_UP:
   case ARROW_DOWN:
@@ -747,6 +769,7 @@ void initEditor() {
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
+  E.screenrows -= 1;
 }
 
 /*** init ***/
